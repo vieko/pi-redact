@@ -1,0 +1,24 @@
+{
+  "name": "pi-redact",
+  "version": "0.1.0",
+  "description": "Keeps secrets out of pi session transcripts: stable placeholders in, real values back for local tools.",
+  "keywords": ["pi-package", "pi-extension", "secrets", "redaction", "privacy"],
+  "license": "MIT",
+  "author": "Vieko Franetovic",
+  "type": "module",
+  "files": ["extensions", "src", "README.md", "NOTICE", "LICENSE"],
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test:vendor": "node test/detect.vendor.mts && node test/pii-options.vendor.mts && node test/random-tags.vendor.mts && node test/session-privacy.vendor.mts",
+    "test": "node --test \"test/*.test.ts\" && npm run test:vendor",
+    "check": "npm run typecheck && npm run test"
+  },
+  "engines": { "node": ">=22.18" },
+  "pi": { "extensions": ["./extensions/pi-redact.ts"] },
+  "peerDependencies": { "@earendil-works/pi-coding-agent": ">=0.1.0" },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@types/node": "^24.0.0",
+    "typescript": "^5.7.0"
+  }
+}
