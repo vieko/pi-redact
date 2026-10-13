@@ -32,6 +32,8 @@ jobs:
       - run: npm ci
       # The same gate as CI: a tag only ships if it is green.
       - run: npm run check
+        env:
+          REDACT_PERF_LIMIT_MS: 10000
       # Guard: the tag must match the package version we are about to publish.
       - name: Verify tag matches package version
         run: |

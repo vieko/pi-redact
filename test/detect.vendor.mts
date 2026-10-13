@@ -788,7 +788,8 @@ for (const text of ROUND_TRIP) {
 // 8 MB each, must finish well inside the hook's 10 s budget.
 {
   const SIZE = 8_000_000
-  const LIMIT_MS = 5_000
+  // pi-redact: CI runners are about 2x slower than a laptop; ci.yml sets 10 s.
+  const LIMIT_MS = Number(process.env.REDACT_PERF_LIMIT_MS ?? 5_000)
   const fill = (unit: () => string): string => {
     const parts: string[] = []
     let n = 0

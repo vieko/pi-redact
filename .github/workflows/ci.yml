@@ -21,3 +21,5 @@ jobs:
       # The gate: tsc --noEmit against the real pi-coding-agent types,
       # then the test suite — which is the specification.
       - run: npm run check
+        env:
+          REDACT_PERF_LIMIT_MS: 10000
