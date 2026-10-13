@@ -1,10 +1,14 @@
 {
-  "name": "pi-redact",
-  "version": "0.1.0",
+  "name": "@vieko/pi-redact",
+  "version": "0.1.1",
   "description": "Keeps secrets out of pi session transcripts: stable placeholders in, real values back for local tools.",
   "keywords": ["pi-package", "pi-extension", "secrets", "redaction", "privacy"],
   "license": "MIT",
   "author": "Vieko Franetovic",
+  "repository": { "type": "git", "url": "git+https://github.com/vieko/pi-redact.git" },
+  "homepage": "https://github.com/vieko/pi-redact#readme",
+  "bugs": { "url": "https://github.com/vieko/pi-redact/issues" },
+  "publishConfig": { "access": "public", "registry": "https://registry.npmjs.org" },
   "type": "module",
   "files": ["extensions", "src", "scripts", "README.md", "NOTICE", "LICENSE"],
   "scripts": {

@@ -6,6 +6,12 @@ A key that reaches the conversation stays there: pi sends it on every later turn
 
 Detection is vendored from [ray-amjad/claude-code-mods](https://github.com/ray-amjad/claude-code-mods/tree/main/plugins/transcript-redactor) (`src/detect.ts`, MIT): about 70 vendor key shapes, entropy tests, base64 that hides a key, passwords in URLs and CLI flags. See `NOTICE` for local changes.
 
+## Install
+
+```
+pi install npm:@vieko/pi-redact
+```
+
 ## Where it hooks in
 
 | pi event | What it does |
@@ -56,6 +62,9 @@ Optional `~/.pi/agent/pi-redact.json`, same keys as the upstream plugin:
 - Sessions recorded before you install it keep their raw values on disk until you run `scripts/scrub-sessions.ts`.
 
 ## Develop
+
+Releases: see `docs/releasing.md`.
+
 
 ```
 npm install
