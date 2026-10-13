@@ -19,6 +19,21 @@ Detection is vendored from [ray-amjad/claude-code-mods](https://github.com/ray-a
 
 Placeholders stay placeholders in `git commit`/`git tag` and `gh pr|issue|api|...`, and in every tool that is not in the restore list (`codemode` itself, `send_message`, MCP tools, web tools).
 
+## Tracking
+
+Each value seen for the first time in a session is logged as a `pi-redact` custom entry: `{ "source": "tool:bash", "values": 1, "vendor": 1 }`. The entry holds counts and the channel only, never the value, and is not sent to the model. `vendor` counts values with a known vendor shape; the rest came from entropy rules.
+
+## Old sessions
+
+`scripts/scrub-sessions.ts` rewrites vendor-shaped keys out of saved sessions and reports how many leaked, where, and when:
+
+```
+node scripts/scrub-sessions.ts --report leaks.json           # dry run
+node scripts/scrub-sessions.ts --write --report leaks.json   # rewrite in place
+```
+
+It trusts only vendor shapes and private key blocks, because rewritten history cannot be restored. Each key becomes `[REDACTED-SECRET-<sha256/8>]`, the same in every file. Signed fields are never touched, files open in a process or modified in the last 15 minutes are skipped, and rewritten files keep their mtime.
+
 ## Commands
 
 `/redact` shows the count and settings. `/redact off` and `/redact on` toggle it for the session.
@@ -38,7 +53,7 @@ Optional `~/.pi/agent/pi-redact.json`, same keys as the upstream plugin:
 - The vault lives in memory. After `/reload`, a restart or a resume, old placeholders no longer map to a value and reach tools as written.
 - Output of `!cmd` is persisted by pi before any hook sees it. The model gets placeholders (the `context` net), but the raw output stays in the session file.
 - Custom messages appended while pi is idle are persisted without `message_end`; the `context` net covers what the model sees.
-- Sessions recorded before you install it keep their raw values on disk.
+- Sessions recorded before you install it keep their raw values on disk until you run `scripts/scrub-sessions.ts`.
 
 ## Develop
 

@@ -476,6 +476,10 @@ const VENDOR_SHAPES: readonly Shape[] = [
   { hint: /pat-(?:na|eu|ap)[0-9]-/, re: word('pat-(?:na|eu|ap)[0-9]-', String.raw`${UUID}(?![\w-])`) },
   { hint: /(?:sdk|api)-[0-9a-f]{8}-/, re: word('(?:sdk|api)-', String.raw`${UUID}(?![\w-])`) },
   { hint: 'lin_oauth_', re: word('lin_oauth_', '[a-f0-9]{64}') },
+  // pi-redact: Linear API keys and Vercel AI Gateway keys. Entropy already
+  // catches both; naming them makes the history scan see them as vendor keys.
+  { hint: 'lin_api_', re: word('lin_api_', '[A-Za-z0-9]{32,4096}') },
+  { hint: 'vck_', re: word('vck_', '[A-Za-z0-9]{40,4096}') },
   { hint: 'shippo_', re: word('shippo_(?:live|test)_', '[a-f0-9]{40}') },
   { hint: 'dapi', re: word('dapi', String.raw`[a-f0-9]{32}(?:-[0-9]{1,2})?(?![\w-])`) },
   { hint: ':fx', re: String.raw`(?<![0-9a-f-])${UUID}:fx(?!\w)` },
@@ -487,6 +491,25 @@ const VENDOR_SHAPES: readonly Shape[] = [
 // Each shape also takes in the rest of its token, so a match that stops at a
 // `-` or `_` inside a key cannot leave the tail of the key on screen.
 const VENDOR = VENDOR_SHAPES.map((s) => ({ hint: s.hint, re: new RegExp(`(?:${s.re})[A-Za-z0-9_-]{0,4096}`, 'g') }))
+
+const GLUED = /(lin_api_(?=[A-Za-z0-9]{32})|vck_(?=[A-Za-z0-9]{40})|npm_(?=[A-Za-z0-9]{36}(?![A-Za-z0-9_]))|gh[pousr]_(?=[A-Za-z0-9]{36}(?![A-Za-z0-9_]))|sk-ant-(?=[A-Za-z0-9_-]{80})|xox[bp]-(?=[0-9]{6,}-))[A-Za-z0-9_-]{0,4096}/g
+
+// pi-redact: every vendor-shaped key and private key block in `text`, with
+// the shape's hint as its family. Nothing is minted; the history scan uses it
+// to rewrite old session files with high-confidence matches only.
+export function findVendorKeys(text: string): { value: string; family: string }[] {
+  const found: { value: string; family: string }[] = []
+  for (const { hint, re } of VENDOR) {
+    if (typeof hint === 'string' ? !text.includes(hint) : !hint.test(text)) continue
+    for (const m of text.matchAll(re)) if (!m[0].includes('[REDACTED-')) found.push({ value: m[0], family: typeof hint === 'string' ? hint : hint.source })
+  }
+  if (text.includes('PRIVATE KEY')) for (const m of text.matchAll(PRIVATE_KEY)) found.push({ value: m[0], family: 'PRIVATE KEY' })
+  // Prefixes distinctive enough to trust mid-word, as in `token=set<key>`
+  // where shell output glued a key to a word. Live scrubbing catches these by
+  // entropy; the history scan only trusts shapes.
+  for (const m of text.matchAll(GLUED)) if (!found.some((f) => f.value.includes(m[0]))) found.push({ value: m[0], family: m[1]! })
+  return found
+}
 
 function scrubVendors(text: string, cfg: Config): string {
   let out = text

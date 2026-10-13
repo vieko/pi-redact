@@ -5,5 +5,7 @@ at commit 812a5e91bf14f70f210d3f93b7a99f7737b5d38e, MIT, (c) 2026 Ray Amjad.
 Local changes in src/detect.ts are marked with "pi-redact:" comments:
 - keep pi session file names (<ISO time>Z_<uuid>.jsonl)
 - keep the macOS per-user temp dir (/var/folders/xx/<random>/T/)
+- name Linear (lin_api_) and Vercel AI Gateway (vck_) keys as vendor shapes
+- export findVendorKeys() for the history scan
 
 The vendored tests only had their import paths changed.

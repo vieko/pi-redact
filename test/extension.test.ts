@@ -30,6 +30,7 @@ function harness(options: Record<string, unknown> = {}) {
 	const handlers = new Map<string, Handler[]>();
 	const commands = new Map<string, { handler: (args: string, ctx: any) => Promise<void> }>();
 	const notices: string[] = [];
+	const entries: { type: string; data: any }[] = [];
 	const ctx = {
 		hasUI: true,
 		ui: { notify: (m: string) => notices.push(m), setStatus: () => {} },
@@ -40,6 +41,7 @@ function harness(options: Record<string, unknown> = {}) {
 			return () => {};
 		},
 		registerCommand: (name: string, c: any) => commands.set(name, c),
+		appendEntry: (type: string, data: any) => entries.push({ type, data }),
 	};
 	createRedactor(pi as any, { options });
 	const fire = (name: string, event: any) => {
@@ -47,7 +49,7 @@ function harness(options: Record<string, unknown> = {}) {
 		for (const h of handlers.get(name) ?? []) result = h(event, ctx);
 		return result;
 	};
-	return { fire, notices, commands, ctx };
+	return { fire, notices, commands, ctx, entries };
 }
 
 /** Runs one tool call: the model's input, the tool's output, the result. */
@@ -248,4 +250,18 @@ test("/redact off stops rewriting for the session", async () => {
 	const r = h.fire("input", { type: "input", text: `use ${GATEWAY}`, source: "interactive" });
 	assert.equal(r.action, "continue");
 	assert.ok(h.notices.at(-1)!.includes("OFF"));
+});
+
+test("each new value is logged once, with its channel and no value", () => {
+	const h = harness();
+	const key = `lin${"_api_"}${body(37)}`;
+	hide(h, key);
+	hide(h, key);
+	toolRound(h, "bash", { command: "cat .env" }, () => `K=${key}\nG=${`v${"ck_"}${body(53)}`}`);
+	const logged = h.entries.filter((e) => e.type === "pi-redact").map((e) => e.data);
+	assert.deepEqual(logged, [
+		{ source: "prompt:interactive", values: 1, vendor: 1 },
+		{ source: "tool:bash", values: 1, vendor: 1 },
+	]);
+	assert.ok(!JSON.stringify(h.entries).includes(key));
 });

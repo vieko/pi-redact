@@ -17,6 +17,10 @@
  *   message_end         backstop for user, custom and toolResult messages
  *   context             request-local net over everything sent to the model
  *
+ * Each value seen for the first time in a session is logged as a `pi-redact`
+ * custom entry (counts and channel only, never the value), so audits can
+ * tell how often and how secrets reach a session.
+ *
  * The vault lives in memory. After /reload or a resume, old placeholders no
  * longer map to a value and reach tools as written.
  */
@@ -29,6 +33,7 @@ import {
 	type Config,
 	collect,
 	escapeLiteralTags,
+	findVendorKeys,
 	makeConfig,
 	mint,
 	restore,
@@ -112,6 +117,22 @@ export function createRedactor(pi: ExtensionAPI, init: RedactOptions = {}): void
 	let hiddenTotal = 0;
 	const handedById = new Map<string, Set<string>>();
 	const contextMemo = new WeakMap<object, AnyMessage>();
+	const tracked = new Set<string>();
+
+	// One entry per channel event that brought in values not seen before.
+	// `vendor` counts the ones with a known vendor shape (high confidence);
+	// the rest came from entropy rules and may be false positives.
+	const track = (tags: Set<string>, source: string): void => {
+		const fresh = [...tags].filter((t) => !t.startsWith("[REDACTED-LITERAL-") && !tracked.has(t));
+		if (fresh.length === 0) return;
+		for (const t of fresh) tracked.add(t);
+		const vendor = fresh.filter((t) => findVendorKeys(restore(t)).length > 0).length;
+		try {
+			pi.appendEntry(NAME, { source, values: fresh.length, vendor });
+		} catch {
+			// Tracking is best-effort; redaction already happened.
+		}
+	};
 
 	const scrub = (text: string): string => {
 		let out = text;
@@ -147,6 +168,7 @@ export function createRedactor(pi: ExtensionAPI, init: RedactOptions = {}): void
 			const { value, tags } = collect(() => scrub(event.text));
 			if (tags.size === 0) return { action: "continue" as const };
 			report(ctx, countHidden(tags), "the prompt");
+			track(tags, `prompt:${event.source}`);
 			return { action: "transform" as const, text: value, images: event.images };
 		} catch {
 			if (ctx.hasUI) ctx.ui.notify(`${NAME} failed to scan the prompt, so it was not sent.`, "error");
@@ -158,7 +180,10 @@ export function createRedactor(pi: ExtensionAPI, init: RedactOptions = {}): void
 	//    them is the user's own.
 	pi.on("before_agent_start", (event) => {
 		if (!enabled || !cfg.secrets) return;
-		for (const file of event.systemPromptOptions.contextFiles) file.content = secretsOnly(file.content);
+		const { tags } = collect(() => {
+			for (const file of event.systemPromptOptions.contextFiles) file.content = secretsOnly(file.content);
+		});
+		track(tags, "context-file");
 	});
 
 	// 3. Placeholders become real values for tools that run here. Fails
@@ -207,6 +232,7 @@ export function createRedactor(pi: ExtensionAPI, init: RedactOptions = {}): void
 			}));
 			if (tags.size === 0) return;
 			report(ctx, countHidden(tags), "");
+			track(tags, `tool:${event.toolName}${event.parentToolCallId ? ":nested" : ""}`);
 			return {
 				content: value.content,
 				// Structured data the walker could not fully rewrite may still hold
@@ -229,8 +255,9 @@ export function createRedactor(pi: ExtensionAPI, init: RedactOptions = {}): void
 		const message = event.message as unknown as AnyMessage;
 		if (message.role !== "user" && message.role !== "custom" && message.role !== "toolResult") return;
 		try {
-			const content = mapContent(message.content, scrub);
+			const { value: content, tags } = collect(() => mapContent(message.content, scrub));
 			if (content === message.content) return;
+			track(tags, `message:${message.role}`);
 			return { message: { ...message, content } as unknown as typeof event.message };
 		} catch {
 			return { message: { ...message, content: [{ type: "text", text: WITHHELD }] } as unknown as typeof event.message };
@@ -272,11 +299,14 @@ export function createRedactor(pi: ExtensionAPI, init: RedactOptions = {}): void
 	pi.on("context", (event) => {
 		if (!enabled) return;
 		let changed = false;
-		const messages = event.messages.map((m) => {
-			const out = cleanMessage(m as unknown as AnyMessage);
-			if (out !== (m as unknown)) changed = true;
-			return out as unknown as typeof m;
-		});
+		const { value: messages, tags } = collect(() =>
+			event.messages.map((m) => {
+				const out = cleanMessage(m as unknown as AnyMessage);
+				if (out !== (m as unknown)) changed = true;
+				return out as unknown as typeof m;
+			}),
+		);
+		track(tags, "context");
 		return changed ? { messages } : undefined;
 	});
 

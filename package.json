@@ -6,7 +6,7 @@
   "license": "MIT",
   "author": "Vieko Franetovic",
   "type": "module",
-  "files": ["extensions", "src", "README.md", "NOTICE", "LICENSE"],
+  "files": ["extensions", "src", "scripts", "README.md", "NOTICE", "LICENSE"],
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
     "test:vendor": "node test/detect.vendor.mts && node test/pii-options.vendor.mts && node test/random-tags.vendor.mts && node test/session-privacy.vendor.mts",
