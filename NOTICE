@@ -11,4 +11,4 @@ Local changes in src/detect.ts are marked with "pi-redact:" comments:
 In test/detect.vendor.mts:
 - the 5 s timing limit can be raised with REDACT_PERF_LIMIT_MS (CI uses 10 s)
 
-The vendored tests only had their import paths changed.
+Otherwise the vendored tests only had their import paths changed.
