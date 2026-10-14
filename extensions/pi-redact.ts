@@ -146,7 +146,7 @@ export function createRedactor(pi: ExtensionAPI, init: RedactOptions = {}): void
 		if (n <= 0) return;
 		hiddenTotal += n;
 		if (!ctx?.hasUI) return;
-		ctx.ui.setStatus(NAME, `redact ${hiddenTotal}`);
+		ctx.ui.setStatus(NAME, ctx.ui.theme.fg("dim", `redact ${hiddenTotal}`));
 		if (cfg.notify && where) ctx.ui.notify(`${NAME}: hid ${n} value(s) from ${where}`, "info");
 	};
 

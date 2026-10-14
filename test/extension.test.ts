@@ -33,7 +33,7 @@ function harness(options: Record<string, unknown> = {}) {
 	const entries: { type: string; data: any }[] = [];
 	const ctx = {
 		hasUI: true,
-		ui: { notify: (m: string) => notices.push(m), setStatus: () => {} },
+		ui: { notify: (m: string) => notices.push(m), setStatus: () => {}, theme: { fg: (_c: string, s: string) => s } },
 	};
 	const pi = {
 		on: (name: string, h: Handler) => {
