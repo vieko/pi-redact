@@ -82,12 +82,12 @@ test("the footer counts distinct values and survives a reload", () => {
 	const key = GITHUB;
 	hide(h, key);
 	hide(h, key);
-	assert.equal(h.statuses.at(-1), "ø 1", "the same key twice is one value");
+	assert.equal(h.statuses.at(-1), "redacted:1", "the same key twice is one value");
 	// A reload is a fresh redactor over the same session entries.
 	const again = harness();
 	again.branch.push(...h.entries.map((e) => ({ type: "custom", customType: e.type, data: e.data })));
 	again.fire("session_start", { type: "session_start" });
-	assert.equal(again.statuses.at(-1), "ø 1");
+	assert.equal(again.statuses.at(-1), "redacted:1");
 });
 
 test("a pasted key becomes a placeholder, for each of our key shapes", () => {
