@@ -24,7 +24,7 @@
  * The vault lives in memory. After /reload or a resume, old placeholders no
  * longer map to a value and reach tools as written.
  *
- * The footer shows `redacted:N`: distinct values kept out of this session's
+ * The footer shows `vault:N`: distinct values kept out of this session's
  * transcript. It counts the `pi-redact` entries on the branch, so the
  * number survives /reload and resume even though the vault does not.
  */
@@ -124,7 +124,7 @@ export function createRedactor(pi: ExtensionAPI, init: RedactOptions = {}): void
 	const showStatus = (): void => {
 		if (!ui?.hasUI || kept <= 0) return;
 		try {
-			ui.ui.setStatus(NAME, ui.ui.theme.fg("dim", `redacted:${kept}`));
+			ui.ui.setStatus(NAME, ui.ui.theme.fg("dim", `vault:${kept}`));
 		} catch {
 			// The context went stale (session replaced); the next session_start resets it.
 		}
