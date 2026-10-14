@@ -1,25 +1,54 @@
 {
   "name": "@vieko/pi-redact",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Keeps secrets out of pi session transcripts: stable placeholders in, real values back for local tools.",
-  "keywords": ["pi-package", "pi-extension", "secrets", "redaction", "privacy"],
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "secrets",
+    "redaction",
+    "privacy"
+  ],
   "license": "MIT",
   "author": "Vieko Franetovic",
-  "repository": { "type": "git", "url": "git+https://github.com/vieko/pi-redact.git" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vieko/pi-redact.git"
+  },
   "homepage": "https://github.com/vieko/pi-redact#readme",
-  "bugs": { "url": "https://github.com/vieko/pi-redact/issues" },
-  "publishConfig": { "access": "public", "registry": "https://registry.npmjs.org" },
+  "bugs": {
+    "url": "https://github.com/vieko/pi-redact/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
   "type": "module",
-  "files": ["extensions", "src", "scripts", "README.md", "NOTICE", "LICENSE"],
+  "files": [
+    "extensions",
+    "src",
+    "scripts",
+    "README.md",
+    "NOTICE",
+    "LICENSE"
+  ],
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
     "test:vendor": "node test/detect.vendor.mts && node test/pii-options.vendor.mts && node test/random-tags.vendor.mts && node test/session-privacy.vendor.mts",
     "test": "node --test \"test/*.test.ts\" && npm run test:vendor",
     "check": "npm run typecheck && npm run test"
   },
-  "engines": { "node": ">=22.18" },
-  "pi": { "extensions": ["./extensions/pi-redact.ts"] },
-  "peerDependencies": { "@earendil-works/pi-coding-agent": ">=0.1.0" },
+  "engines": {
+    "node": ">=22.18"
+  },
+  "pi": {
+    "extensions": [
+      "./extensions/pi-redact.ts"
+    ]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": ">=0.1.0"
+  },
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "*",
     "@types/node": "^24.0.0",
