@@ -31,9 +31,12 @@ function harness(options: Record<string, unknown> = {}) {
 	const commands = new Map<string, { handler: (args: string, ctx: any) => Promise<void> }>();
 	const notices: string[] = [];
 	const entries: { type: string; data: any }[] = [];
+	const statuses: (string | undefined)[] = [];
+	const branch: any[] = [];
 	const ctx = {
 		hasUI: true,
-		ui: { notify: (m: string) => notices.push(m), setStatus: () => {}, theme: { fg: (_c: string, s: string) => s } },
+		ui: { notify: (m: string) => notices.push(m), setStatus: (_k: string, t?: string) => statuses.push(t), theme: { fg: (_c: string, s: string) => s } },
+		sessionManager: { getBranch: () => branch },
 	};
 	const pi = {
 		on: (name: string, h: Handler) => {
@@ -49,7 +52,7 @@ function harness(options: Record<string, unknown> = {}) {
 		for (const h of handlers.get(name) ?? []) result = h(event, ctx);
 		return result;
 	};
-	return { fire, notices, commands, ctx, entries };
+	return { fire, notices, commands, ctx, entries, statuses, branch };
 }
 
 /** Runs one tool call: the model's input, the tool's output, the result. */
@@ -71,6 +74,21 @@ function hide(h: ReturnType<typeof harness>, key: string): string {
 	assert.ok(!r.text.includes(key), "key reached the model");
 	return r.text.match(TAG)![0];
 }
+
+test("the footer counts distinct values and survives a reload", () => {
+	const h = harness();
+	h.fire("session_start", { type: "session_start" });
+	assert.equal(h.statuses.at(-1), undefined, "no status before anything is hidden");
+	const key = GITHUB;
+	hide(h, key);
+	hide(h, key);
+	assert.equal(h.statuses.at(-1), "redact 1", "the same key twice is one value");
+	// A reload is a fresh redactor over the same session entries.
+	const again = harness();
+	again.branch.push(...h.entries.map((e) => ({ type: "custom", customType: e.type, data: e.data })));
+	again.fire("session_start", { type: "session_start" });
+	assert.equal(again.statuses.at(-1), "redact 1");
+});
 
 test("a pasted key becomes a placeholder, for each of our key shapes", () => {
 	const h = harness();

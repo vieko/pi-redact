@@ -23,6 +23,10 @@
  *
  * The vault lives in memory. After /reload or a resume, old placeholders no
  * longer map to a value and reach tools as written.
+ *
+ * The footer shows `redact N`: distinct values kept out of this session's
+ * transcript. It counts the `pi-redact` entries on the branch, so the
+ * number survives /reload and resume even though the vault does not.
  */
 
 import { existsSync, readFileSync } from "node:fs";
@@ -115,6 +119,16 @@ export function createRedactor(pi: ExtensionAPI, init: RedactOptions = {}): void
 	const cfg = buildConfig(init.options ?? loadOptions(CONFIG_PATH));
 	let enabled = true;
 	let hiddenTotal = 0;
+	let kept = 0;
+	let ui: ExtensionContext | undefined;
+	const showStatus = (): void => {
+		if (!ui?.hasUI || kept <= 0) return;
+		try {
+			ui.ui.setStatus(NAME, ui.ui.theme.fg("dim", `redact ${kept}`));
+		} catch {
+			// The context went stale (session replaced); the next session_start resets it.
+		}
+	};
 	const handedById = new Map<string, Set<string>>();
 	const contextMemo = new WeakMap<object, AnyMessage>();
 	const tracked = new Set<string>();
@@ -126,6 +140,8 @@ export function createRedactor(pi: ExtensionAPI, init: RedactOptions = {}): void
 		const fresh = [...tags].filter((t) => !t.startsWith("[REDACTED-LITERAL-") && !tracked.has(t));
 		if (fresh.length === 0) return;
 		for (const t of fresh) tracked.add(t);
+		kept += fresh.length;
+		showStatus();
 		const vendor = fresh.filter((t) => findVendorKeys(restore(t)).length > 0).length;
 		try {
 			pi.appendEntry(NAME, { source, values: fresh.length, vendor });
@@ -146,7 +162,6 @@ export function createRedactor(pi: ExtensionAPI, init: RedactOptions = {}): void
 		if (n <= 0) return;
 		hiddenTotal += n;
 		if (!ctx?.hasUI) return;
-		ctx.ui.setStatus(NAME, ctx.ui.theme.fg("dim", `redact ${hiddenTotal}`));
 		if (cfg.notify && where) ctx.ui.notify(`${NAME}: hid ${n} value(s) from ${where}`, "info");
 	};
 
@@ -160,6 +175,16 @@ export function createRedactor(pi: ExtensionAPI, init: RedactOptions = {}): void
 		}
 		return out;
 	};
+
+	pi.on("session_start", (_event, ctx) => {
+		ui = ctx;
+		kept = 0;
+		for (const e of ctx.sessionManager.getBranch() as { type: string; customType?: string; data?: { values?: number } }[]) {
+			if (e.type === "custom" && e.customType === NAME) kept += e.data?.values ?? 0;
+		}
+		if (ctx.hasUI) ctx.ui.setStatus(NAME, undefined);
+		showStatus();
+	});
 
 	// 1. What the user types. `!cmd` is the user's own shell and runs as typed.
 	pi.on("input", (event, ctx) => {
