@@ -26,17 +26,18 @@ const TAGS = /\[REDACTED-SECRET-[0-9a-f]{8}\]/g;
 
 type Handler = (event: any, ctx: any) => any;
 
-function harness(options: Record<string, unknown> = {}) {
+function harness(options: Record<string, unknown> = {}, init: { machineKey?: string; keyPath?: string } = { machineKey: "test-machine-key" }) {
 	const handlers = new Map<string, Handler[]>();
 	const commands = new Map<string, { handler: (args: string, ctx: any) => Promise<void> }>();
 	const notices: string[] = [];
 	const entries: { type: string; data: any }[] = [];
 	const statuses: (string | undefined)[] = [];
 	const branch: any[] = [];
+	const session: { header: any } = { header: { type: "session", id: "session-a" } };
 	const ctx = {
 		hasUI: true,
 		ui: { notify: (m: string) => notices.push(m), setStatus: (_k: string, t?: string) => statuses.push(t), theme: { fg: (_c: string, s: string) => s } },
-		sessionManager: { getBranch: () => branch },
+		sessionManager: { getBranch: () => branch, getHeader: () => session.header },
 	};
 	const pi = {
 		on: (name: string, h: Handler) => {
@@ -46,13 +47,13 @@ function harness(options: Record<string, unknown> = {}) {
 		registerCommand: (name: string, c: any) => commands.set(name, c),
 		appendEntry: (type: string, data: any) => entries.push({ type, data }),
 	};
-	createRedactor(pi as any, { options });
+	createRedactor(pi as any, { options, ...init });
 	const fire = (name: string, event: any) => {
 		let result: any;
 		for (const h of handlers.get(name) ?? []) result = h(event, ctx);
 		return result;
 	};
-	return { fire, notices, commands, ctx, entries, statuses, branch };
+	return { fire, notices, commands, ctx, entries, statuses, branch, session };
 }
 
 /** Runs one tool call: the model's input, the tool's output, the result. */

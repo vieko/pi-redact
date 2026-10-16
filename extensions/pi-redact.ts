@@ -21,15 +21,20 @@
  * custom entry (counts and channel only, never the value), so audits can
  * tell how often and how secrets reach a session.
  *
- * The vault lives in memory. After /reload or a resume, old placeholders no
- * longer map to a value and reach tools as written.
+ * Placeholders are keyed per session lineage (a fork or clone shares its
+ * root's key) with a machine key in ~/.pi/agent/pi-redact.key, so /reload,
+ * a restart or a resume mints the same placeholder for the same value and
+ * the prompt cache survives. The vault (placeholder -> value) lives in
+ * memory: after /reload or a resume, old placeholders no longer map to a
+ * value until the value is seen again, and reach tools as written.
  *
  * The footer shows `redact:N`: distinct values kept out of this session's
  * transcript. It counts the `pi-redact` entries on the branch, so the
  * number survives /reload and resume even though the vault does not.
  */
 
-import { existsSync, readFileSync } from "node:fs";
+import { createHmac, randomBytes } from "node:crypto";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
@@ -43,12 +48,14 @@ import {
 	restore,
 	scrubPii,
 	scrubSecrets,
+	setTagKey,
 	type WalkState,
 	walk,
 } from "../src/detect.ts";
 
 const NAME = "pi-redact";
 const CONFIG_PATH = join(homedir(), ".pi", "agent", "pi-redact.json");
+const KEY_PATH = join(homedir(), ".pi", "agent", "pi-redact.key");
 
 /** Tools that run on this machine and may receive real values. */
 export const DEFAULT_RESTORE_TOOLS = "bash,powershell,write,edit,read,grep,find,ls";
@@ -113,6 +120,55 @@ function mapContent<T>(content: T, fn: (s: string) => string): T {
 export interface RedactOptions {
 	/** Overrides ~/.pi/agent/pi-redact.json, for tests. */
 	options?: Record<string, unknown>;
+	/** Machine key file; defaults to ~/.pi/agent/pi-redact.key. */
+	keyPath?: string;
+	/** Machine key itself, skipping the file, for tests. */
+	machineKey?: string;
+}
+
+/**
+ * The machine key, created on first use (0600). It never reaches the model;
+ * without it a placeholder cannot be tied to a guessed value. Undefined when
+ * the file cannot be read or written: tags then stay per-process random.
+ */
+export function loadMachineKey(path: string): string | undefined {
+	try {
+		const key = readFileSync(path, "utf8").trim();
+		if (/^[0-9a-f]{64}$/.test(key)) return key;
+	} catch {
+		// Missing: create it below.
+	}
+	try {
+		writeFileSync(path, `${randomBytes(32).toString("hex")}\n`, { mode: 0o600, flag: "wx" });
+	} catch {
+		// Another process won the race, or the directory is read-only.
+	}
+	try {
+		const key = readFileSync(path, "utf8").trim();
+		return /^[0-9a-f]{64}$/.test(key) ? key : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
+type Header = { id?: string; parentSession?: string } | null | undefined;
+
+/** Id of the oldest session this one was forked or cloned from. */
+export function lineageId(header: Header): string | undefined {
+	let id = header?.id;
+	let parent = header?.parentSession;
+	for (let hop = 0; parent && hop < 16; hop++) {
+		try {
+			const first = readFileSync(parent, "utf8").split("\n", 1)[0] ?? "";
+			const up = JSON.parse(first) as { type?: string; id?: string; parentSession?: string };
+			if (up.type !== "session" || !up.id) break;
+			id = up.id;
+			parent = up.parentSession;
+		} catch {
+			break;
+		}
+	}
+	return id;
 }
 
 export function createRedactor(pi: ExtensionAPI, init: RedactOptions = {}): void {
@@ -130,8 +186,25 @@ export function createRedactor(pi: ExtensionAPI, init: RedactOptions = {}): void
 		}
 	};
 	const handedById = new Map<string, Set<string>>();
-	const contextMemo = new WeakMap<object, AnyMessage>();
+	let contextMemo = new WeakMap<object, AnyMessage>();
 	const tracked = new Set<string>();
+	let machineKey = init.machineKey;
+	let sessionKey: string | undefined;
+
+	// One key per session lineage. A new lineage starts a new vault, so tags
+	// do not link one session to another.
+	const keySession = (header: Header): void => {
+		machineKey ??= loadMachineKey(init.keyPath ?? KEY_PATH);
+		const lineage = lineageId(header);
+		if (!machineKey || !lineage) return;
+		const key = createHmac("sha256", machineKey).update(`pi-redact/tags/v1\u0000${lineage}`).digest();
+		const hex = key.toString("hex");
+		if (hex === sessionKey) return;
+		sessionKey = hex;
+		setTagKey(key);
+		contextMemo = new WeakMap();
+		tracked.clear();
+	};
 
 	// One entry per channel event that brought in values not seen before.
 	// `vendor` counts the ones with a known vendor shape (high confidence);
@@ -179,6 +252,8 @@ export function createRedactor(pi: ExtensionAPI, init: RedactOptions = {}): void
 	pi.on("session_start", (_event, ctx) => {
 		ui = ctx;
 		kept = 0;
+		const sm = ctx.sessionManager as { getHeader?: () => Header };
+		keySession(typeof sm.getHeader === "function" ? sm.getHeader() : undefined);
 		for (const e of ctx.sessionManager.getBranch() as { type: string; customType?: string; data?: { values?: number } }[]) {
 			if (e.type === "custom" && e.customType === NAME) kept += e.data?.values ?? 0;
 		}
