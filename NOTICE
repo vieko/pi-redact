@@ -7,6 +7,9 @@ Local changes in src/detect.ts are marked with "pi-redact:" comments:
 - keep the macOS per-user temp dir (/var/folders/xx/<random>/T/)
 - name Linear (lin_api_) and Vercel AI Gateway (vck_) keys as vendor shapes
 - export findVendorKeys() for the history scan
+- mint placeholders as a keyed HMAC of the value (setTagKey()) instead of
+  random bytes, so a reloaded process mints the same tags; the vendored
+  test/random-tags.vendor.mts is replaced by test/stable-tags.test.ts
 
 In test/detect.vendor.mts:
 - the 5 s timing limit can be raised with REDACT_PERF_LIMIT_MS (CI uses 10 s)

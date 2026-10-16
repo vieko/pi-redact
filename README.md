@@ -25,6 +25,10 @@ pi install npm:@vieko/pi-redact
 
 Placeholders stay placeholders in `git commit`/`git tag` and `gh pr|issue|api|...`, and in every tool that is not in the restore list (`codemode` itself, `send_message`, MCP tools, web tools).
 
+## Placeholders
+
+A placeholder is an HMAC-SHA256 of the value. The key belongs to the session lineage (a fork or clone uses its root's key) and comes from a machine key in `~/.pi/agent/pi-redact.key`, created with mode 0600 on first use. After `/reload`, a restart or a resume, the same value gets the same placeholder, so the history pi sends does not change and the prompt cache holds. Two unrelated sessions get different placeholders. The machine key never reaches the model, so a placeholder cannot be matched to a guessed value. If the key file cannot be read or written, placeholders fall back to random tags per process.
+
 ## Tracking
 
 Each value seen for the first time in a session is logged as a `pi-redact` custom entry: `{ "source": "tool:bash", "values": 1, "vendor": 1 }`. The entry holds counts and the channel only, never the value, and is not sent to the model. `vendor` counts values with a known vendor shape; the rest came from entropy rules.
@@ -56,7 +60,7 @@ Optional `~/.pi/agent/pi-redact.json`, same keys as the upstream plugin:
 
 ## Limits
 
-- The vault lives in memory. After `/reload`, a restart or a resume, old placeholders no longer map to a value and reach tools as written.
+- The vault lives in memory. After `/reload`, a restart or a resume, an old placeholder maps to its value again only when that value turns up again; until then it reaches tools as written.
 - Output of `!cmd` is persisted by pi before any hook sees it. The model gets placeholders (the `context` net), but the raw output stays in the session file.
 - Custom messages appended while pi is idle are persisted without `message_end`; the `context` net covers what the model sees.
 - Sessions recorded before you install it keep their raw values on disk until you run `scripts/scrub-sessions.ts`.

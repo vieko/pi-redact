@@ -16,6 +16,8 @@
 //
 // Nothing is written to disk. The vault dies with the session.
 
+import { createHash, type Hash, randomBytes } from 'node:crypto'
+
 export type Kind = 'SECRET' | 'EMAIL' | 'IP' | 'LITERAL'
 
 export type Config = {
@@ -51,12 +53,39 @@ let minted: Set<string> | null = null
 const TAG = /\[REDACTED-(?:SECRET|EMAIL|IP|LITERAL)-[0-9a-f]{8}\]/g
 const WHOLE_TAG = /^\[REDACTED-(?:SECRET|EMAIL|IP|LITERAL)-[0-9a-f]{8}\]$/
 
-function randomHex8(): string {
-  const bytes = new Uint8Array(4)
-  const crypto = (globalThis as { crypto?: { getRandomValues?: (values: Uint8Array) => Uint8Array } }).crypto
-  if (crypto?.getRandomValues) crypto.getRandomValues(bytes)
-  else for (let index = 0; index < bytes.length; index++) bytes[index] = Math.floor(Math.random() * 256)
-  return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('')
+// pi-redact: a tag is a keyed hash of the value, not a random draw, so a
+// reloaded or restarted process mints the same tag for the same value and
+// the history it sends keeps its prompt-cache prefix. The host sets the key
+// per session with setTagKey(); without one, each module load draws a random
+// key, so tags stay unlinkable across processes as upstream intends.
+let tagKey: Uint8Array = randomBytes(32)
+let pads = hmacPads(tagKey)
+
+// HMAC-SHA256 with the two padded key blocks hashed once and copied per tag:
+// createHmac() per value made the vendored timing cases twice as slow.
+function hmacPads(key: Uint8Array): { inner: Hash; outer: Hash } {
+  const block = Buffer.alloc(64)
+  Buffer.from(key.length > 64 ? createHash('sha256').update(key).digest() : key).copy(block)
+  const inner = createHash('sha256').update(block.map(b => b ^ 0x36))
+  const outer = createHash('sha256').update(block.map(b => b ^ 0x5c))
+  return { inner, outer }
+}
+
+function tagHex(kind: Kind, value: string, attempt: number): string {
+  const inner = pads.inner.copy().update(`${kind}\u0000${attempt}\u0000${value}`).digest()
+  return pads.outer.copy().update(inner).digest('hex').slice(0, 8)
+}
+
+// pi-redact: swaps the tag key. A different key starts a new vault: tags
+// minted under the old key would no longer match what a fresh process mints.
+export function setTagKey(key: Uint8Array): void {
+  if (Buffer.from(key).equals(Buffer.from(tagKey))) return
+  tagKey = Uint8Array.from(key)
+  pads = hmacPads(tagKey)
+  byValue.clear()
+  byTag.clear()
+  echo.clear()
+  echoIndex = null
 }
 
 // Swaps a value for its placeholder and remembers both. A value that already
@@ -72,7 +101,8 @@ export function mint(kind: Kind, raw: string): string {
     return seen
   }
   let tag: string
-  do tag = `[REDACTED-${kind}-${randomHex8()}]`
+  let attempt = 0
+  do tag = `[REDACTED-${kind}-${tagHex(kind, value, attempt++)}]`
   while (byTag.has(tag))
   byValue.set(value, tag)
   byTag.set(tag, value)
