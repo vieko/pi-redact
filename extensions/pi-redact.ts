@@ -33,7 +33,7 @@
  * number survives /reload and resume even though the vault does not.
  */
 
-import { createHmac, randomBytes } from "node:crypto";
+import { createHash, createHmac, randomBytes } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -187,6 +187,7 @@ export function createRedactor(pi: ExtensionAPI, init: RedactOptions = {}): void
 	};
 	const handedById = new Map<string, Set<string>>();
 	let contextMemo = new WeakMap<object, AnyMessage>();
+	let contextMemoById = new Map<string, AnyMessage>();
 	const tracked = new Set<string>();
 	let machineKey = init.machineKey;
 	let sessionKey: string | undefined;
@@ -203,6 +204,7 @@ export function createRedactor(pi: ExtensionAPI, init: RedactOptions = {}): void
 		sessionKey = hex;
 		setTagKey(key);
 		contextMemo = new WeakMap();
+		contextMemoById = new Map();
 		tracked.clear();
 	};
 
@@ -364,12 +366,30 @@ export function createRedactor(pi: ExtensionAPI, init: RedactOptions = {}): void
 		}
 	});
 
+	// pi may rebuild message objects on each request, so key the memo by the
+	// unscrubbed message's digest as well as by object. A digest, not role +
+	// timestamp: two messages that share a timestamp must never share output.
+	const contextMessageId = (message: AnyMessage): string | undefined => {
+		try {
+			return createHash("sha256").update(JSON.stringify(message)).digest("hex");
+		} catch {
+			return undefined;
+		}
+	};
+
 	// 6. The last net, request-local: bashExecution output, custom messages
 	//    appended while idle, and history from sessions recorded before this
-	//    extension. Same value -> same placeholder, so the cached prefix holds.
+	//    extension. Freeze each message's first scrub result: the echo set may
+	//    grow later, but already-sent bytes must not change.
 	const cleanMessage = (message: AnyMessage): AnyMessage => {
 		const cached = contextMemo.get(message);
 		if (cached) return cached;
+		const id = contextMessageId(message);
+		const stableCached = id === undefined ? undefined : contextMemoById.get(id);
+		if (stableCached) {
+			contextMemo.set(message, stableCached);
+			return stableCached;
+		}
 		let out = message;
 		switch (message.role) {
 			case "user":
@@ -393,6 +413,7 @@ export function createRedactor(pi: ExtensionAPI, init: RedactOptions = {}): void
 			}
 		}
 		contextMemo.set(message, out);
+		if (id !== undefined) contextMemoById.set(id, out);
 		return out;
 	};
 

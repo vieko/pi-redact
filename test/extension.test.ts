@@ -234,6 +234,34 @@ test("message_end leaves assistant messages alone", () => {
 	assert.equal(h.fire("message_end", { type: "message_end", message }), undefined);
 });
 
+test("context keeps an already-sent bare value byte-identical after it becomes a known echo", () => {
+	const h = harness();
+	const value = "ordinaryPhraseQuietlyRepeated".repeat(2);
+	const original = { role: "custom", customType: "example", content: `sample: ${value}`, timestamp: 10 };
+	const firstInput = [structuredClone(original)];
+	const first = h.fire("context", { type: "context", messages: firstInput })?.messages ?? firstInput;
+	assert.equal(first[0].content, original.content, "the value should not trigger a detector on its own");
+
+	toolRound(h, "bash", { command: "cat .env" }, () => `API_KEY=${value}`);
+	const secondInput = [structuredClone(original)];
+	const second = h.fire("context", { type: "context", messages: secondInput }).messages;
+	assert.equal(JSON.stringify(second[0]), JSON.stringify(first[0]), "an already-sent message must remain byte-identical");
+
+	const fresh = { role: "custom", customType: "example", content: `new: ${value}`, timestamp: 11 };
+	const third = h.fire("context", { type: "context", messages: [structuredClone(fresh)] }).messages;
+	assert.ok(!third[0].content.includes(value), "a message first seen after the echo was learned must be scrubbed");
+});
+
+test("context keeps messages that share a timestamp apart", () => {
+	const h = harness();
+	const a = { role: "custom", customType: "example", content: "first note", timestamp: 20 };
+	const b = { role: "custom", customType: "example", content: "second note", timestamp: 20 };
+	const input = [structuredClone(a), structuredClone(b)];
+	const out = h.fire("context", { type: "context", messages: input })?.messages ?? input;
+	assert.equal(out[0].content, "first note");
+	assert.equal(out[1].content, "second note");
+});
+
 test("the context net hides old secrets and is stable across requests", () => {
 	const h = harness();
 	const messages = [
