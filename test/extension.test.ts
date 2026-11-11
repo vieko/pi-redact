@@ -307,8 +307,8 @@ test("each new value is logged once, with its channel and no value", () => {
 	toolRound(h, "bash", { command: "cat .env" }, () => `K=${key}\nG=${`v${"ck_"}${body(53)}`}`);
 	const logged = h.entries.filter((e) => e.type === "pi-redact").map((e) => e.data);
 	assert.deepEqual(logged, [
-		{ source: "prompt:interactive", values: 1, vendor: 1 },
-		{ source: "tool:bash", values: 1, vendor: 1 },
+		{ source: "prompt:interactive", values: 1, vendor: 1, families: { lin_api_: 1 } },
+		{ source: "tool:bash", values: 1, vendor: 1, families: { vck_: 1 } },
 	]);
 	assert.ok(!JSON.stringify(h.entries).includes(key));
 });
