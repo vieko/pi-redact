@@ -31,7 +31,7 @@ A placeholder is an HMAC-SHA256 of the value. The key belongs to the session lin
 
 ## Tracking
 
-Each value seen for the first time in a session is logged as a `pi-redact` custom entry: `{ "source": "tool:bash", "values": 1, "vendor": 1 }`. The entry holds counts and the channel only, never the value, and is not sent to the model. `vendor` counts values with a known vendor shape; the rest came from entropy rules.
+Each value seen for the first time in a session is logged as a `pi-redact` custom entry. Its fields are `source` (channel), `values` (new distinct values), `vendor` (new values with a known vendor shape), and `families` (family name to count, summing to `values`). The entry holds counts only, never the value or a piece of it, and is not sent to the model. Families are `uuid`, `prefixed-id`, `identifier`, and `high-entropy`; vendor-shaped values use the detector's public prefix or pattern as their family.
 
 ## Old sessions
 

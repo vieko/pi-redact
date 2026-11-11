@@ -52,6 +52,7 @@ import {
 	type WalkState,
 	walk,
 } from "../src/detect.ts";
+import { familyOf } from "../src/family.ts";
 
 const NAME = "pi-redact";
 const CONFIG_PATH = join(homedir(), ".pi", "agent", "pi-redact.json");
@@ -217,9 +218,15 @@ export function createRedactor(pi: ExtensionAPI, init: RedactOptions = {}): void
 		for (const t of fresh) tracked.add(t);
 		kept += fresh.length;
 		showStatus();
-		const vendor = fresh.filter((t) => findVendorKeys(restore(t)).length > 0).length;
+		const values = fresh.map((t) => restore(t));
+		const vendor = values.filter((value) => findVendorKeys(value).length > 0).length;
+		const families: Record<string, number> = {};
+		for (const value of values) {
+			const family = familyOf(value);
+			families[family] = (families[family] ?? 0) + 1;
+		}
 		try {
-			pi.appendEntry(NAME, { source, values: fresh.length, vendor });
+			pi.appendEntry(NAME, { source, values: fresh.length, vendor, families });
 		} catch {
 			// Tracking is best-effort; redaction already happened.
 		}
