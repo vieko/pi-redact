@@ -62,7 +62,7 @@ const KEY_PATH = join(homedir(), ".pi", "agent", "pi-redact.key");
 export const DEFAULT_RESTORE_TOOLS = "bash,powershell,write,edit,read,grep,find,ls";
 
 /** Ids that look random but are public handles in our daily tooling. */
-export const DEFAULT_ALLOW_PREFIXES = "dpl_,prj_,team_,wrun_,gen_01";
+export const DEFAULT_ALLOW_PREFIXES = "dpl_,prj_,team_,wrun_,gen_01,snap_,agent_01";
 
 /**
  * Tools whose result holds live placeholders from nested calls. Their output

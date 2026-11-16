@@ -56,7 +56,7 @@ Optional `~/.pi/agent/pi-redact.json`, same keys as the upstream plugin:
 { "pii": false, "allow": "", "allowPrefixes": "", "restoreTools": "bash,write,edit,read,grep,find,ls", "notify": true }
 ```
 
-`allowPrefixes` is added to the built-in public ids (`dpl_`, `prj_`, `team_`, `wrun_`, `gen_01`).
+`allowPrefixes` is added to the built-in public ids (`dpl_`, `prj_`, `team_`, `wrun_`, `gen_01`, `snap_`, `agent_01`).
 
 ## Limits
 
