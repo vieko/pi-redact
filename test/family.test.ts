@@ -96,13 +96,19 @@ test("mixed-case letters and digits with no separator is 'identifier'", () => {
 	assert.equal(familyOf(GO_CONST), "identifier");
 });
 
+test("a JWT, whole or cut after its payload, is 'jwt'", () => {
+	const jwt = `ey${"J"}${body(30)}.ey${"J"}${body(60)}`;
+	assert.equal(familyOf(`${jwt}.${body(40)}`), "jwt");
+	assert.equal(familyOf(jwt), "jwt");
+});
+
 test("anything else is 'high-entropy'", () => {
 	assert.equal(familyOf(OPAQUE), "high-entropy");
 	assert.equal(familyOf(hex(40)), "high-entropy");
 });
 
 test("FAMILIES lists the shape classes", () => {
-	assert.deepEqual([...FAMILIES].sort(), ["high-entropy", "identifier", "prefixed-id", "uuid"]);
+	assert.deepEqual([...FAMILIES].sort(), ["high-entropy", "identifier", "jwt", "prefixed-id", "uuid"]);
 });
 
 test("a family name never carries a piece of the value", () => {
