@@ -10,6 +10,9 @@ Local changes in src/detect.ts are marked with "pi-redact:" comments:
 - mint placeholders as a keyed HMAC of the value (setTagKey()) instead of
   random bytes, so a reloaded process mints the same tags; the vendored
   test/random-tags.vendor.mts is replaced by test/stable-tags.test.ts
+- export hiddenByKey(): pairOut() and the password columns of an SQL INSERT
+  record the placeholders they mint, so the host can count values hidden for
+  a password-like key as their own family
 
 In test/detect.vendor.mts:
 - the 5 s timing limit can be raised with REDACT_PERF_LIMIT_MS (CI uses 10 s)

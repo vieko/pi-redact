@@ -108,7 +108,7 @@ test("anything else is 'high-entropy'", () => {
 });
 
 test("FAMILIES lists the shape classes", () => {
-	assert.deepEqual([...FAMILIES].sort(), ["high-entropy", "identifier", "jwt", "prefixed-id", "uuid"]);
+	assert.deepEqual([...FAMILIES].sort(), ["high-entropy", "identifier", "jwt", "password-key", "prefixed-id", "uuid"]);
 });
 
 test("a family name never carries a piece of the value", () => {
@@ -157,5 +157,92 @@ test("family counts add up to `values` on every entry, and no entry carries a va
 	const text = JSON.stringify(h.entries);
 	for (const [key, prefix] of [[GATEWAY, 4], [LINEAR, 8], [GITHUB, 4]] as const) {
 		assert.ok(!leaks(text, key.slice(prefix), 6), "an entry carries a piece of a key");
+	}
+});
+
+// `password-key`: the detector took the value for the name or flag in front
+// of it. The vault is shared by every harness in this file, so each case
+// below uses values no other case has seen.
+const human = (): string => `Summer${hex(2)}${body(2)}!`;
+const dashed = (): string => `${body(16)}-${body(16)}`;
+const camel = (): string => `Model${body(14)}Sonnet4${body(8)}`;
+const prompt = (text: string) => {
+	const h = harness();
+	const r = h.fire("input", { type: "input", text, source: "interactive" });
+	return { ...h, result: r };
+};
+
+test("a value under a password-like key is 'password-key', whatever its shape", () => {
+	const shapes = [human(), dashed(), `${hex(8)}-${hex(4)}-7${hex(3)}-b${hex(3)}-${hex(12)}`, camel()];
+	const lines = [
+		(v: string) => `password=${v}`,
+		(v: string) => `{"secret": "${v}"}`,
+		(v: string) => `DB_PASS=${v}`,
+		(v: string) => `client_secret: ${v}`,
+	];
+	for (const [i, value] of shapes.entries()) {
+		assert.notEqual(familyOf(value), "password-key", "the shape alone never gives this family");
+		const { result, logged } = prompt(lines[i]!(value));
+		assert.equal(result.action, "transform");
+		assert.ok(!result.text.includes(value), "the value is hidden");
+		assert.deepEqual(logged(), [{ source: "prompt:interactive", values: 1, vendor: 0, families: { "password-key": 1 } }]);
+	}
+});
+
+test("a password flag and a password column count as 'password-key' too", () => {
+	for (const line of [(v: string) => `tool --password ${v} --verbose`, (v: string) => `INSERT INTO users (name, password) VALUES ('bob', '${v}');`]) {
+		const value = human();
+		const { result, logged } = prompt(line(value));
+		assert.ok(!result.text.includes(value), "the value is hidden");
+		assert.deepEqual(logged()[0]?.families, { "password-key": 1 });
+	}
+});
+
+test("the same shapes with no password-like key keep their families", () => {
+	const { logged } = prompt(`see ${dashed()} and ${camel()} in the log`);
+	assert.deepEqual(logged()[0]?.families, { "high-entropy": 1, identifier: 1 });
+	// A name the detector judges by entropy (`token=`) is not a password-like key.
+	assert.deepEqual(prompt(`token=${camel()}`).logged()[0]?.families, { identifier: 1 });
+	assert.deepEqual(prompt(`token=${dashed()}`).logged()[0]?.families, { "high-entropy": 1 });
+});
+
+test("a vendor key under a password-like key keeps its vendor family", () => {
+	const key = `gh${"p_"}${body(33)}`;
+	const { logged } = prompt(`password=${key}`);
+	const [entry] = logged();
+	assert.ok(entry);
+	assert.equal(entry.vendor, 1);
+	assert.deepEqual(entry.families, { [familyOf(key)]: 1 });
+	assert.equal(familyOf(key, true), familyOf(key));
+});
+
+test("'password-key' sits beside the other families and the counts still add up", () => {
+	const pw = human();
+	const key = `lin${"_api_"}${body(37)}`;
+	const { logged } = prompt(`password=${pw}\nLINEAR=${key}\nsee ${dashed()} in the log`);
+	const [entry] = logged();
+	assert.ok(entry);
+	assert.deepEqual(entry.families, { "password-key": 1, [familyOf(key)]: 1, "high-entropy": 1 });
+	assert.equal(entry.values, 3);
+	assert.equal(entry.vendor, 1);
+});
+
+test("a 'password-key' entry carries no piece of the value, on any channel", () => {
+	const h = harness();
+	const typed = human();
+	const printed = human();
+	const quoted = dashed();
+	h.fire("input", { type: "input", text: `log in with password=${typed}`, source: "interactive" });
+	const call = { type: "tool_call", toolCallId: "p1", toolName: "bash", input: { command: "cat config.json .env" } };
+	h.fire("tool_call", call);
+	const output = `{"secret": "${quoted}"}\nDB_PASSWORD=${printed}`;
+	h.fire("tool_result", { type: "tool_result", toolCallId: "p1", toolName: "bash", input: call.input, content: [{ type: "text", text: output }], isError: false, details: { full: output } });
+	const logged = h.logged();
+	assert.deepEqual(logged.map((e) => e.families), [{ "password-key": 1 }, { "password-key": 2 }]);
+	for (const entry of logged) assert.deepEqual(Object.keys(entry).sort(), ["families", "source", "values", "vendor"]);
+	const text = JSON.stringify(h.entries);
+	for (const value of [typed, printed, quoted]) {
+		assert.ok(!leaks(text, value, 4), "an entry carries a piece of a password");
+		assert.ok(!leaks("password-key", value, 4), "the family name carries a piece of a password");
 	}
 });
