@@ -43,6 +43,7 @@ import {
 	collect,
 	escapeLiteralTags,
 	findVendorKeys,
+	hiddenByKey,
 	makeConfig,
 	mint,
 	restore,
@@ -221,10 +222,10 @@ export function createRedactor(pi: ExtensionAPI, init: RedactOptions = {}): void
 		const values = fresh.map((t) => restore(t));
 		const vendor = values.filter((value) => findVendorKeys(value).length > 0).length;
 		const families: Record<string, number> = {};
-		for (const value of values) {
-			const family = familyOf(value);
+		fresh.forEach((tag, i) => {
+			const family = familyOf(values[i]!, hiddenByKey(tag));
 			families[family] = (families[family] ?? 0) + 1;
-		}
+		});
 		try {
 			pi.appendEntry(NAME, { source, values: fresh.length, vendor, families });
 		} catch {

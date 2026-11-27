@@ -84,8 +84,22 @@ export function setTagKey(key: Uint8Array): void {
   pads = hmacPads(tagKey)
   byValue.clear()
   byTag.clear()
+  keyed.clear()
   echo.clear()
   echoIndex = null
+}
+
+// pi-redact: placeholders minted for a value taken because of the name or
+// flag in front of it (`password=`, `"secret":`, `--password`), whatever its
+// shape. The host counts them as their own family. Holds placeholders only.
+const keyed = new Set<string>()
+export function hiddenByKey(tag: string): boolean {
+  return keyed.has(tag)
+}
+function mintByKey(value: string): string {
+  const tag = mint('SECRET', value)
+  keyed.add(tag)
+  return tag
 }
 
 // Swaps a value for its placeholder and remembers both. A value that already
@@ -1013,7 +1027,7 @@ function slashedSecret(run: string, named: boolean, cfg: Config): boolean {
 // Mints `value` unless it is already a placeholder, allowed, or a stand-in.
 function pairOut(cfg: Config, head: string, value: string, tail = ''): string {
   if (WHOLE_TAG.test(value) || cfg.allow.has(value) || isStandIn(value)) return head + value + tail
-  return head + mint('SECRET', value) + tail
+  return head + mintByKey(value) + tail // pi-redact: was mint('SECRET', value)
 }
 
 function parkOpaque(text: string): string {
@@ -1171,7 +1185,7 @@ function scrubAssignments(text: string, cfg: Config): string {
 // the value in that column is hidden. Bounded to 100 rows and 20,000
 // characters per INSERT. Quoted values only; a number is never a key.
 function scrubSqlInserts(text: string, cfg: Config): string {
-  const ranges: [number, number][] = []
+  const ranges: [number, number, boolean][] = [] // pi-redact: third item, true under a password column
   for (const m of text.matchAll(SQL_INSERT)) {
     const names = m[1]!.split(',').map((c) => c.trim().replace(/^[`"[]|[`"\]]$/g, ''))
     const kinds = names.map((n) => (PW_NAME.test(n) ? 'pw' : KEY_NAME.test(n) && !/(?:^|_)id$|public/i.test(n) ? 'key' : ''))
@@ -1191,7 +1205,7 @@ function scrubSqlInserts(text: string, cfg: Config): string {
           const v = text.slice(from, i)
           i++
           const kind = kinds[col]
-          if (kind && v.length >= 3 && !cfg.allow.has(v) && (kind === 'pw' ? !isStandIn(v) : looksSecret(v, 'key=', cfg))) ranges.push([from, from + v.length])
+          if (kind && v.length >= 3 && !cfg.allow.has(v) && (kind === 'pw' ? !isStandIn(v) : looksSecret(v, 'key=', cfg))) ranges.push([from, from + v.length, kind === 'pw'])
         } else {
           while (i < limit && text[i] !== ',' && text[i] !== ')') i++
         }
@@ -1210,9 +1224,9 @@ function scrubSqlInserts(text: string, cfg: Config): string {
   if (ranges.length === 0) return text
   const parts: string[] = []
   let last = 0
-  for (const [from, to] of ranges) {
+  for (const [from, to, pw] of ranges) {
     if (from < last) continue
-    parts.push(text.slice(last, from), mint('SECRET', text.slice(from, to)))
+    parts.push(text.slice(last, from), pw ? mintByKey(text.slice(from, to)) : mint('SECRET', text.slice(from, to)))
     last = to
   }
   parts.push(text.slice(last))

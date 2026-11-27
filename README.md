@@ -31,7 +31,7 @@ A placeholder is an HMAC-SHA256 of the value. The key belongs to the session lin
 
 ## Tracking
 
-Each value seen for the first time in a session is logged as a `pi-redact` custom entry. Its fields are `source` (channel), `values` (new distinct values), `vendor` (new values with a known vendor shape), and `families` (family name to count, summing to `values`). The entry holds counts only, never the value or a piece of it, and is not sent to the model. Families are `jwt`, `uuid`, `prefixed-id`, `identifier`, and `high-entropy`; vendor-shaped values use the detector's public prefix or pattern as their family.
+Each value seen for the first time in a session is logged as a `pi-redact` custom entry. Its fields are `source` (channel), `values` (new distinct values), `vendor` (new values with a known vendor shape), and `families` (family name to count, summing to `values`). The entry holds counts only, never the value or a piece of it, and is not sent to the model. Vendor-shaped values use the detector's public prefix or pattern as their family. A value hidden because of the name or flag in front of it (`password=...`, `"secret": "..."`, `--password ...`, a `password` column in an SQL `INSERT`) is `password-key`, whatever it looks like. The rest are counted by shape: `jwt`, `uuid`, `prefixed-id`, `identifier`, and `high-entropy`.
 
 ## Old sessions
 
