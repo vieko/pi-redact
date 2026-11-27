@@ -808,6 +808,8 @@ for (const text of ROUND_TRIP) {
     ['base64 one line', () => randomB64(SIZE * 0.75), false],
     ['base64url json', () => fill(json), false],
     ['eyJ repeated', () => 'eyJ'.repeat(SIZE / 3), false],
+    // pi-redact: two-part dotted runs (file names, hosts) with one `eyJ`.
+    ['dotted pairs and eyJ', () => 'eyJ ' + fill(() => `src/${pick(LOWER, 6)}.ts host.${pick(LOWER, 4)} `), false],
     ['sk- repeated', () => (sk + '-').repeat(SIZE / 3), false],
     ['BEGIN without END', () => (PEM_BEGIN('RSA') + '\n').repeat(SIZE / 32), false],
     ['password lines', () => fill(() => `password: ${mixed(10)}\n`), false],

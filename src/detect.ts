@@ -561,7 +561,8 @@ const PUTTY_PRIVATE = /(Private-Lines: \d+\r?\n)((?:[A-Za-z0-9+/=]{1,80}(?:\r?\n
 // A run of dot-separated parts, where a JWT may hide. It has one starting
 // point per run, so a long run is scanned once. A JWT regex of its own went
 // quadratic on base64 JSON, where every row starts with `eyJ`.
-const DOTTED = /(?<![A-Za-z0-9_-])[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)(?:\.[A-Za-z0-9_-]+)+/g
+// pi-redact: two parts are enough, for a JWT cut after its payload.
+const DOTTED = /(?<![A-Za-z0-9_-])[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)+/g
 
 // The password inside a connection string: postgres://user:PASSWORD@host.
 // The user may be empty (redis://:pw@host), and the password may hold `/` or
@@ -1043,6 +1044,13 @@ function scrubJwtChain(chain: string, cfg: Config): string {
       const jwt = `${segs[k]!.slice(i)}.${segs[k + 1]}.${segs[k + 2]}`
       out.push(segs[k]!.slice(0, i) + (cfg.allow.has(jwt) ? jwt : mint('SECRET', jwt)))
       k += 3
+    } else if (k + 2 === segs.length && segs[k]!.startsWith('eyJ') && segs[k]!.length >= 11 && segs[k + 1]!.startsWith('eyJ') && segs[k + 1]!.length >= 8) {
+      // pi-redact: a JWT cut after its payload (a truncated description).
+      // Hidden as one value, so its header does not become a known value
+      // that splits every later JWT with the same header.
+      const head = `${segs[k]}.${segs[k + 1]}`
+      out.push(cfg.allow.has(head) ? head : mint('SECRET', head))
+      k += 2
     } else {
       out.push(segs[k]!)
       k += 1
@@ -1507,10 +1515,13 @@ export function scrubSecrets(text: string, cfg: Config): string {
   parked = startParking(text)
   local = new Set()
   try {
-    let out = rehideKnown(text)
+    // pi-redact: JWTs first. A known value inside one (the standard HS256
+    // header) would otherwise be hidden on its own and cut the JWT into
+    // several placeholders, with short pieces left in the clear.
+    let out = text.includes('eyJ') ? text.replace(DOTTED, (m) => scrubJwtChain(m, cfg)) : text
+    out = rehideKnown(out)
     out = parkOpaque(out)
     out = scrubKeyBlocks(out, cfg)
-    if (out.includes('eyJ')) out = out.replace(DOTTED, (m) => scrubJwtChain(m, cfg))
     out = scrubVendors(out, cfg)
     out = scrubUrls(out, cfg)
     out = scrubCommandLines(out, cfg)
