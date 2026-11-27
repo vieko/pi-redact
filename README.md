@@ -65,13 +65,20 @@ Optional `~/.pi/agent/pi-redact.json`, same keys as the upstream plugin:
 - Custom messages appended while pi is idle are persisted without `message_end`; the `context` net covers what the model sees.
 - Sessions recorded before you install it keep their raw values on disk until you run `scripts/scrub-sessions.ts`.
 
-## Develop
+## Development
 
 Releases: see `docs/releasing.md`.
 
+```
+npm install              # CI uses npm ci
+npm run typecheck        # tsc, no emit
+npm test                 # extension tests (node --test), then the vendored detector tests
+npm run check            # typecheck, then test: what CI runs
+pi -ne -e ./extensions/pi-redact.ts
+```
+
+The vendored timing cases in `test/detect.vendor.mts` (8 MB inputs, "password lines" among them) fail when one takes longer than 5 s, so on a slow machine set `REDACT_PERF_LIMIT_MS` to a higher limit in milliseconds; CI sets it to `10000` because its runners are about twice as slow as a laptop.
 
 ```
-npm install
-npm run check            # tsc + extension tests + vendored detector tests
-pi -ne -e ./extensions/pi-redact.ts
+REDACT_PERF_LIMIT_MS=10000 npm run check
 ```
