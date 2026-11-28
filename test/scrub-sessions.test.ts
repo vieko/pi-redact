@@ -213,3 +213,30 @@ test("a file modified within --skip-recent-min is skipped", (t) => {
 	assert.deepEqual(report.errors, []);
 	assert.match(stderr, /1 live skipped/);
 });
+
+test("the same key gets the same tag in every file", (t) => {
+	const { root, dir, project } = sandbox(t);
+	const other = join(dir, "other");
+	mkdirSync(other);
+	const a = session(join(project, "a.jsonl"), [header(), toolResult(`one ${generatedTestKey}`)], 120);
+	const b = session(join(other, "b.jsonl"), [header(), toolResult(`two ${generatedTestKey}`)], 120);
+
+	const { report, text } = scrub(root, dir, "--write", "--skip-recent-min", "0");
+
+	for (const file of [a, b]) {
+		const after = readFileSync(file, "utf8");
+		assert.ok(!after.includes(generatedTestKey), "no key is left in the file");
+		assert.deepEqual(after.match(TAG), [tagOf(generatedTestKey)]);
+	}
+	assert.equal(report.filesScanned, 2);
+	assert.equal(report.filesWithKeys, 2);
+	assert.equal(report.linesChanged, 2);
+	assert.deepEqual(report.errors, []);
+	assert.equal(report.keys.length, 1, "one key, listed once");
+	const key = report.keys[0]!;
+	assert.equal(key.tag, tagOf(generatedTestKey));
+	assert.equal(key.occurrences, 2);
+	assert.equal(key.sessions, 2);
+	assert.deepEqual([...key.sessionFiles].sort(), [join("/other", "b.jsonl"), join("/project", "a.jsonl")]);
+	assert.ok(!text.includes(generatedTestKey), "the report never holds the key");
+});
